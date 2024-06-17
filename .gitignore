@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+# Ignore .txt for now so I can keep sample data to play with
+*.txt
+
 # Distribution / packaging
 .Python
 build/
