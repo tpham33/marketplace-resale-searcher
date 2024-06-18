@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 import os
 import re
+from difflib import get_close_matches
                  
 def crawl_marketplace(city: str, query: str, max_price: int):
 
@@ -20,8 +21,6 @@ def crawl_marketplace(city: str, query: str, max_price: int):
 
     # Define the URL to scrape.
     marketplace_url = f'https://www.facebook.com/marketplace/{city}/search/?query={query}&maxPrice={max_price}'
-    initial_url = "https://www.facebook.com/login/device-based/regular/login/"
-    # Get listings of particular item in a particular city for a particular price.
     # Initialize the session using Playwright.
     with sync_playwright() as p:
         # Open a new browser page.
@@ -90,3 +89,65 @@ def crawl_marketplace(city: str, query: str, max_price: int):
                 'link': clean_link
             })
         return result
+
+def crawl_price_checker(items: dict): 
+
+    # Define the URL to scrape.
+    price_checker_url = "https://www.jdpower.com/cars/"
+    priced_items = []
+    # Initialize the session using Playwright.
+    with sync_playwright() as p:
+        # Open a new browser page.
+        browser = p.chromium.launch(headless=False)
+        page = browser.new_page()
+
+        for item in items: 
+            # Grab vehicle information
+            pattern = r"(\d{4})\s+(\w+)\s+(.*)"
+            match = re.search(pattern, item["name"])
+            year = match.group(1)
+            make = match.group(2)
+            # Set this arbitrarily because it is usually not formatted well
+            ending = match.group(3)
+
+            price_checker_url = f'{price_checker_url}{year}/{make}'
+            
+            # Navigate to the URL.
+            page.goto(price_checker_url)
+            # Wait for the page to load.
+            time.sleep(2)
+            html = page.content()
+            soup = BeautifulSoup(html, 'html.parser')
+
+            # Grab the current models for the selected year
+            models = []
+            if int(year) > 2004:
+                containers = soup.find_all('div', class_='yearMake_model-wrapper__t8GAv')
+                for div in containers:
+                    title = div.find('h3', 'heading-xs spacing-s').text
+                    models.append(title[5:])
+            else:
+                containers = soup.find_all('h3', class_='yearMake_classic-car-list-item__gYiT1 heading-xs spacing-s')
+                for h3 in containers:
+                    title = h3.text
+                    models.append(title[5:])
+            
+            model = get_close_matches(ending, models, 3, 0.2)
+
+            price_checker_url = f'{price_checker_url}{year}/{make}/{model[0]}/trim'
+            # Sometimes there are no trims
+        browser.close()
+
+
+results = [
+    {
+        'name': '2000 Chevrolet corvette Convertible 2D',
+        'price': '',
+        'location': '',
+        'title': '',
+        'image': '',
+        'link': ''
+    }
+]
+
+crawl_price_checker(results)
